@@ -1,7 +1,18 @@
 package lab5;
 
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.Socket;
+import java.net.URL;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 /** A class for finding links in an html file.
@@ -12,7 +23,7 @@ public class LinkMatcher {
 	// This regex should match an HTML anchor tag such as <a  href  = "http://cs.www.usfca.edu"  >"
 	// where the actual hyperlink is captured in a group.
 	// See the following link regarding the format of the anchor tag: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a
-	public static final String REGEX = ""; // FILL IN!  
+	public static final String REGEX = "(?i)<a\\s+[^>]*?(?i)href\\s*=\\s*(\"([^\"]*\")|'[^']*'|([^'\">\\s]+))"; // FILL IN!  
 	
 	/**
 	 * Take an html file and return a list of hyperlinks in that html 
@@ -36,10 +47,45 @@ public class LinkMatcher {
 	 */
 	public static List<String> findLinks(String filename) {
 		List<String> links = new ArrayList<>();
-
-		// FILL IN CODE
+		String hrefRegex = "\\s*(?i)href\\s*=\\s*(\"([^\"]*\")|'[^']*'|([^'\">\\s]+))";
+		Pattern patternRegex = Pattern.compile(REGEX);
+		Pattern patternHref = Pattern.compile(hrefRegex);
+		Matcher matcherRegex;
+		Matcher matcherHref;
+		String line;
+		String linkWithHref;
+		String linkWithoutHref;
+		
+		try {
+			BufferedReader bufferedReader = new BufferedReader(new FileReader(Paths.get(filename).toAbsolutePath().toString()));
+			while ((line = bufferedReader.readLine()) != null){
+				//System.out.println(line);
+				matcherRegex = patternRegex.matcher(line);
+				while (matcherRegex.find()){
+					linkWithHref = matcherRegex.group();
+					//System.out.println(linkWithHref);
+					matcherHref = patternHref.matcher(linkWithHref);
+					while(matcherHref.find()){
+						linkWithoutHref = matcherHref.group().trim().replaceAll(" ", "");
+						linkWithoutHref = linkWithoutHref.substring(6, linkWithoutHref.length()-1);
+						//System.out.println(linkWithoutHref);
+						//remove the fragment
+						if(!linkWithoutHref.startsWith("#") && linkWithoutHref.contains("#")){
+							linkWithoutHref = linkWithoutHref.substring(0, linkWithoutHref.indexOf("#"));
+						}
+						if(!links.contains(linkWithoutHref) && !linkWithoutHref.startsWith("#") 
+								&& !linkWithoutHref.isEmpty() && !linkWithoutHref.equals("/")){
+							links.add(linkWithoutHref);
+							//System.out.println(linkWithoutHref);
+						}
+					}
+				}
+			}
+			bufferedReader.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		return links;
-
 	}
 	
 	
@@ -53,13 +99,83 @@ public class LinkMatcher {
 	 */
 	public static List<String> fetchAndFindLinks(String url) {
 		List<String> links = new ArrayList<>();
+		URL urlUrl;
+		Socket socket = null;
+		PrintWriter printWriter = null;
+		BufferedReader bufferedReader= null;
+		String htmlResult;
+		String hrefRegex = "\\s*(?i)href\\s*=\\s*(\"([^\"]*\")|'[^']*'|([^'\">\\s]+))";
+		Pattern patternRegex = Pattern.compile(REGEX);
+		Pattern patternHref = Pattern.compile(hrefRegex);
+		Matcher matcherRegex;
+		Matcher matcherHref;
+		String linkWithHref;
+		String linkWithoutHref;
 		
-		
-		// FILL IN CODE
+		try {
+			urlUrl = new URL(url);
+			socket = new Socket(urlUrl.getHost(), 80);
+			
+			// output stream
+			printWriter = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
+			String request = "GET " + urlUrl.getPath() + "?" + urlUrl.getQuery() + " HTTP/1.1" + System.lineSeparator()
+									+ "Host: " + urlUrl.getHost() + System.lineSeparator()
+									+ "Connection: close" + System.lineSeparator()
+									+ System.lineSeparator();
+			//System.out.println("Request: " + request);
+			printWriter.println(request);
+			printWriter.flush();
+			
+			// input stream for the secure socket.
+			bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			String line;
+			StringBuffer sb = new StringBuffer();
+			while ((line = bufferedReader.readLine()) != null) {
+				//System.out.println(line);
+				sb.append(line);
+			}
+			htmlResult = sb.toString();
+			
+			//find the links
+			matcherRegex = patternRegex.matcher(htmlResult);
+			while (matcherRegex.find()){
+				linkWithHref = matcherRegex.group();
+				//System.out.println(linkWithHref);
+				matcherHref = patternHref.matcher(linkWithHref);
+				while(matcherHref.find()){
+					linkWithoutHref = matcherHref.group().trim().replaceAll(" ", "");
+					linkWithoutHref = linkWithoutHref.substring(6, linkWithoutHref.length()-1);
+					//System.out.println(linkWithoutHref);
+					//remove the fragment
+					if(!linkWithoutHref.startsWith("#") && linkWithoutHref.contains("#")){
+						linkWithoutHref = linkWithoutHref.substring(0, linkWithoutHref.indexOf("#"));
+					}
+					if(!links.contains(linkWithoutHref) && !linkWithoutHref.startsWith("#") 
+							&& !linkWithoutHref.isEmpty()&& !linkWithoutHref.equals("/")){
+						links.add(linkWithoutHref);
+						//System.out.println(linkWithoutHref);
+					}
+				}
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				// close the streams and the socket
+				printWriter.close();
+				bufferedReader.close();
+				socket.close();
+			} catch (IOException e) {
+				System.out.println("An exception occured while trying to close the streams or the socket: " + e);
+			}
+		}		
 		return links;
-
 	}
-
 	
+	public static void main(String[] args) {
+		//Testing
+		findLinks("TestHTML.html");
+		fetchAndFindLinks("http://tutoringcenter.cs.usfca.edu/resources/");
+	}
 
 }
