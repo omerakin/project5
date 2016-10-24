@@ -126,7 +126,7 @@ public class LinkMatcher {
 			printWriter.println(request);
 			printWriter.flush();
 			
-			// input stream for the secure socket.
+			// input stream
 			bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			String line;
 			StringBuffer sb = new StringBuffer();
